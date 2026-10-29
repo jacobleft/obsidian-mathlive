@@ -305,15 +305,14 @@ test.describe("formulas in the note", () => {
 			await clickWidgetButton(inlineWidget(page, 1), "Expand");
 			await waitForModalField(page);
 			const field = modalField(page);
-			await field.evaluate((mfe) => { mfe.position = mfe.lastOffset; });
+			await field.evaluate(async (mfe) => { await mfe.ownerDocument.fonts.ready; mfe.position = mfe.lastOffset; });
 
 			const alpha = field.locator(".ML__mathit").filter({ hasText: /^α$/ });
 			await alpha.click({ position: { x: 1, y: 10 } });
 			await expect(field).toHaveJSProperty("position", 0);
 
-			const beta = field.locator(".ML__mathit").filter({ hasText: /^β$/ });
-			const betaX = await beta.evaluate((element) => element.getBoundingClientRect().width * 3 / 4);
-			await beta.click({ position: { x: betaX, y: 10 } });
+			const end = await field.locator(".ML__latex").boundingBox();
+			await page.mouse.click(end.x + end.width + 2, end.y + end.height / 2);
 			await expect(field).toHaveJSProperty("position", await field.evaluate((mfe) => mfe.lastOffset));
 		} finally {
 			await inheritedStyle.evaluate((style) => style.remove());
