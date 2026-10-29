@@ -123,7 +123,18 @@
   display: flex;
 }
 
-/* Two buttons after each formula: ✨ AI fill (with Magic edit and the other actions) and Expand. */
+/* A display formula inside prose leaves Obsidian's empty preview in the preceding line. */
+.markdown-source-view.mod-cm6 .cm-line:has(+ .obsidian-mathlive-codemirror-wrapper:not(.inline)) > div.math {
+  display: none;
+}
+
+/* Use padding so CodeMirror measures the space on both sides of the display widget. */
+.markdown-source-view.mod-cm6 .cm-editor .cm-content > .cm-line:has(> div.math) + .obsidian-mathlive-codemirror-wrapper:not(.inline) {
+  --mathlive-block-padding: 1em;
+  padding-block: var(--mathlive-block-padding);
+}
+
+/* Formula actions: AI fill, inline/display conversion, and Expand. */
 .obsidian-mathlive-codemirror-wrapper .obsidian-mathlive-widget-button {
   flex: none;
   align-self: center;
@@ -249,7 +260,7 @@ body.mathlive-block-widgets-active .markdown-source-view.mod-cm6 .obsidian-mathl
 /* MathLive keeps its buttons 5px from the top, also on formulas several lines tall. */
 .obsidian-mathlive-codemirror-wrapper:not(.inline) .obsidian-mathlive-widget-buttons {
   position: absolute;
-  top: 5px;
+  top: calc(5px + var(--mathlive-block-padding, 0px));
   right: 5px;
   gap: 4px;
 }
