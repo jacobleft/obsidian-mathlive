@@ -251,8 +251,8 @@ class MathLiveWidget extends WidgetType {
 			});
 		};
 
-		// Formula buttons: AI fill, conversion between inline and display math, and Expand. On full-line formulas they sit inside the
-		// input, beside MathLive's keyboard and ☰ buttons.
+		// Formula buttons: AI fill, inline/display conversion, and Expand. Full-line formulas keep
+		// them inside the input, beside MathLive's keyboard and ☰ buttons.
 		const buttons = wrapper.createDiv({ cls: "obsidian-mathlive-widget-buttons" });
 		const addButton = (cls: string, icon: string, label: string, attr: Record<string, string> = {}) => {
 			const button = buttons.createEl("button", {
