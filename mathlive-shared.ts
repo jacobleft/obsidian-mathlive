@@ -387,6 +387,8 @@ export function createMathfield(config: MathfieldConfig): MathfieldElement {
 	mfe.value = config.initialValue;
 	mfe.addEventListener("mount", () => {
 		styleMathfieldInPopout(mfe);
+		// Obsidian's MathJax accepts \dots; MathLive needs an explicit alias.
+		mfe.macros = { ...mfe.macros, dots: { def: "\\ldots", expand: false } };
 		if (mfe.shadowRoot && !mfe.shadowRoot.querySelector(".mathlive-wide-accents")) {
 			const style = createEl("style", { cls: "mathlive-wide-accents" });
 			// MathLive centers a zero-width SVG box as if it were a fixed-width accent.
@@ -414,7 +416,7 @@ export function createMathfield(config: MathfieldConfig): MathfieldElement {
 					class: "ML__center-menu",
 					ariaLabel: name,
 					tooltip: () => `\\${accentCommand()}`,
-					label: () => convertLatexToMarkup(`\\${accentCommand()}{${mfe.getValue(mfe.selection, "latex") || "x"}}`),
+					label: () => convertLatexToMarkup(`\\${accentCommand()}{${mfe.getValue(mfe.selection, "latex") || "x"}}`, { macros: mfe.macros }),
 					onMenuSelect: () => mfe.insert(`\\${accentCommand()}{#@}`, { selectionMode: "item" }),
 				};
 			});
