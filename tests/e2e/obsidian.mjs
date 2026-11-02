@@ -109,13 +109,14 @@ export async function launchObsidian() {
 	});
 
 	const close = async () => {
-		await browser?.close().catch(() => {});
+		// Stop the app before closing CDP, which can stall when the renderer is unresponsive.
 		try {
 			process.kill(-proc.pid, "SIGKILL");
 		} catch {
 			// Already gone.
 		}
 		fs.rmSync(base, { recursive: true, force: true });
+		await browser?.close().catch(() => {});
 	};
 
 	try {
