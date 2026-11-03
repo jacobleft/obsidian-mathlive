@@ -42,6 +42,9 @@ function createVault() {
 		}
 		fs.copyFileSync(source, path.join(pluginDir, file));
 	}
+	// The upstream test suite addresses commands and settings through the original test ID.
+	const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8"));
+	fs.writeFileSync(path.join(pluginDir, "manifest.json"), JSON.stringify({ ...manifest, id: "mathlive" }));
 	fs.writeFileSync(path.join(vault, ".obsidian", "community-plugins.json"), '["mathlive"]');
 	fs.copyFileSync(FIXTURE_NOTE, path.join(vault, "Test.md"));
 
