@@ -79,6 +79,7 @@ const BODY_CLASSES = [
 	"mathlive-hide-mathjax-block",
 	"mathlive-inline-widgets-active",
 	"mathlive-block-widgets-active",
+	"mathlive-grey-background",
 ];
 
 export default class MathLivePlugin extends Plugin {
@@ -775,6 +776,7 @@ export default class MathLivePlugin extends Plugin {
 			(this.settings.hideRenderedBlockMath || this.settings.enableBlockMathWidgets);
 
 		for (const doc of this.getOpenDocuments()) {
+			doc.body.toggleClass("mathlive-grey-background", this.settings.greyMathBackground);
 			doc.body.toggleClass("mathlive-hide-mathjax-inline", hideInlineInEditor);
 			doc.body.toggleClass("mathlive-hide-mathjax-block", hideBlockInEditor);
 			doc.body.toggleClass("mathlive-hide-rendered-inline", hideInlineInEditor);
@@ -960,6 +962,11 @@ export class MathliveSettingTab extends PluginSettingTab {
 					name: "Enable block math widgets",
 					desc: "Show MathLive widgets for `$$...$$` expressions when inline editor mode is enabled.",
 					addControl: toggle("enableBlockMathWidgets"),
+				},
+				{
+					name: "Grey math background",
+					desc: "Shade editable inline and display formulas in the note. Off by default.",
+					addControl: toggle("greyMathBackground"),
 				},
 				{
 					name: "Hide rendered inline math",

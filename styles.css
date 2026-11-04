@@ -199,15 +199,19 @@ body.mathlive-block-widgets-active .markdown-source-view.mod-cm6 .obsidian-mathl
   min-width: 0;
   border-radius: var(--radius-m, 8px);
   border: 1px solid var(--background-modifier-border);
-  background: var(--background-primary);
+  background: transparent;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.mathlive-grey-background .obsidian-mathlive-codemirror-wrapper .mathlive-field {
+  background: var(--code-background, var(--background-primary-alt));
 }
 
 .obsidian-mathlive-codemirror-wrapper .mathlive-field:focus-within {
   border-color: var(--interactive-accent);
 }
 
-/* Inline formulas sit in the line of text like inline code, at the text's own size. */
+/* Inline formulas sit in the line of text at the text's own size. */
 .obsidian-mathlive-codemirror-wrapper.inline {
   display: inline-flex;
   gap: 0;
@@ -225,7 +229,6 @@ body.mathlive-block-widgets-active .markdown-source-view.mod-cm6 .obsidian-mathl
   padding: 0 0.15em;
   border: 0;
   border-radius: var(--radius-s, 4px);
-  background: var(--code-background, var(--background-primary-alt));
   font-size: inherit;
   overflow-x: auto;
 }
