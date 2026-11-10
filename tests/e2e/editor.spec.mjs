@@ -43,9 +43,10 @@ test.describe("formulas in the note", () => {
 		await expect(inlineField(page, 0)).toHaveJSProperty("value", "x^2 + y^2 = z^2");
 		await expect(inlineField(page, 1)).toHaveJSProperty("value", "\\alpha + \\beta");
 		await expect(blockField(page)).toHaveJSProperty("value", "\n\\int_0^1 f(x)\\,dx\n");
-		// Each formula has an AI fill and an Expand button, and nothing else around it.
+		// Each formula has AI fill, conversion and Expand actions.
 		await expect(page.locator(".cm-content .obsidian-mathlive-widget-ai-button")).toHaveCount(3);
 		await expect(page.locator(".cm-content .obsidian-mathlive-widget-expand-button")).toHaveCount(3);
+		await expect(page.locator(".cm-content .obsidian-mathlive-widget-convert-button")).toHaveCount(3);
 		await expect(page.locator(".cm-content .obsidian-mathlive-codemirror-wrapper a")).toHaveCount(0);
 	});
 
@@ -299,6 +300,26 @@ test.describe("formulas in the note", () => {
 		await expect.poll(() => noteLine(page, "Last line")).toBe("Last line $\\alpha+\\beta+y$ done.");
 	});
 
+	test("expanded inline formulas allow mouse cursor placement when the modal disables selection", async ({ page }) => {
+		const inheritedStyle = await page.addStyleTag({ content: ".mathlive-modal-content { user-select: none; }" });
+		try {
+			await clickWidgetButton(inlineWidget(page, 1), "Expand");
+			await waitForModalField(page);
+			const field = modalField(page);
+			await field.evaluate(async (mfe) => { await mfe.ownerDocument.fonts.ready; mfe.position = mfe.lastOffset; });
+
+			const alpha = field.locator(".ML__mathit").filter({ hasText: /^α$/ });
+			await alpha.click({ position: { x: 1, y: 10 } });
+			await expect(field).toHaveJSProperty("position", 0);
+
+			const end = await field.locator(".ML__latex").boundingBox();
+			await page.mouse.click(end.x + end.width + 2, end.y + end.height / 2);
+			await expect(field).toHaveJSProperty("position", await field.evaluate((mfe) => mfe.lastOffset));
+		} finally {
+			await inheritedStyle.evaluate((style) => style.remove());
+		}
+	});
+
 	test("Expand opens a block formula in the editor window", async ({ page }) => {
 		await clickWidgetButton(blockWidget(page), "Expand");
 		await expect(page.locator(".mathlive-modal-title")).toHaveText("Edit math block");
@@ -329,22 +350,24 @@ test.describe("formulas in the note", () => {
 		await expect(page.locator(".menu .menu-item")).toHaveCount(7);
 	});
 
-	test("block formulas show AI fill and Expand inside the input, after its keyboard and menu buttons", async ({ page }) => {
+	test("block formulas show AI fill, conversion and Expand inside the input", async ({ page }) => {
 		const widget = blockWidget(page);
 		await blockField(page).hover({ position: { x: 10, y: 10 } });
 		const keyboard = await blockField(page).locator("[part=virtual-keyboard-toggle]").boundingBox();
 		const menu = await blockField(page).locator("[part=menu-toggle]").boundingBox();
 		const field = await blockField(page).boundingBox();
 		const ai = await widget.getByRole("button", { name: "AI fill" }).boundingBox();
+		const convert = await widget.getByRole("button", { name: "Convert to inline math" }).boundingBox();
 		const expand = await widget.getByRole("button", { name: "Expand" }).boundingBox();
 		// One row, same size, in order, all inside the input's border.
-		for (const button of [menu, ai, expand]) {
+		for (const button of [menu, ai, convert, expand]) {
 			expect(Math.abs(button.y + button.height / 2 - (keyboard.y + keyboard.height / 2))).toBeLessThanOrEqual(2);
 			expect(Math.abs(button.width - keyboard.width)).toBeLessThanOrEqual(1);
 		}
 		expect(keyboard.x).toBeLessThan(menu.x);
 		expect(menu.x + menu.width).toBeLessThanOrEqual(ai.x);
-		expect(ai.x + ai.width).toBeLessThanOrEqual(expand.x);
+		expect(ai.x + ai.width).toBeLessThanOrEqual(convert.x);
+		expect(convert.x + convert.width).toBeLessThanOrEqual(expand.x);
 		expect(expand.x + expand.width).toBeLessThanOrEqual(field.x + field.width);
 		expect(ai.y).toBeGreaterThanOrEqual(field.y);
 		expect(ai.y + ai.height).toBeLessThanOrEqual(field.y + field.height);

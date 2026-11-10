@@ -11,6 +11,7 @@ export interface PluginSettings {
 	enableInlineEditorMode: boolean;
 	enableInlineMathWidgets: boolean;
 	enableBlockMathWidgets: boolean;
+	greyMathBackground: boolean;
 	hideRenderedInlineMath: boolean;
 	hideRenderedBlockMath: boolean;
 	immediateInlineUpdate: boolean;
@@ -46,6 +47,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	enableInlineEditorMode: true,
 	enableInlineMathWidgets: true,
 	enableBlockMathWidgets: true,
+	greyMathBackground: false,
 	hideRenderedInlineMath: true,
 	hideRenderedBlockMath: true,
 	immediateInlineUpdate: true,

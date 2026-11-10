@@ -22,7 +22,7 @@ permissions:
   attestations: write
 
 env:
-  PLUGIN_NAME: MathLive
+  PLUGIN_NAME: MathLive (Patched)
   VERSION: ${{ inputs.version || github.ref_name }}
 
 jobs:

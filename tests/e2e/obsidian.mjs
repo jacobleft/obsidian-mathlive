@@ -42,6 +42,9 @@ function createVault() {
 		}
 		fs.copyFileSync(source, path.join(pluginDir, file));
 	}
+	// The upstream test suite addresses commands and settings through the original test ID.
+	const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8"));
+	fs.writeFileSync(path.join(pluginDir, "manifest.json"), JSON.stringify({ ...manifest, id: "mathlive" }));
 	fs.writeFileSync(path.join(vault, ".obsidian", "community-plugins.json"), '["mathlive"]');
 	fs.copyFileSync(FIXTURE_NOTE, path.join(vault, "Test.md"));
 
@@ -109,13 +112,14 @@ export async function launchObsidian() {
 	});
 
 	const close = async () => {
-		await browser?.close().catch(() => {});
+		// Stop the app before closing CDP, which can stall when the renderer is unresponsive.
 		try {
 			process.kill(-proc.pid, "SIGKILL");
 		} catch {
 			// Already gone.
 		}
 		fs.rmSync(base, { recursive: true, force: true });
+		await browser?.close().catch(() => {});
 	};
 
 	try {

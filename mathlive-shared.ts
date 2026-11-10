@@ -14,6 +14,7 @@ const loadScreenCapture = () => import(/* webpackMode: "eager" */ "./screen-capt
 
 type MathfieldElementCtor = typeof import("mathlive")["MathfieldElement"];
 let mathfieldElementCtor: MathfieldElementCtor | null = null;
+let convertLatexToMarkup: typeof import("mathlive")["convertLatexToMarkup"];
 let mathliveLoadPromise: Promise<MathfieldElementCtor> | null = null;
 const fontDocuments = new WeakSet<Document>();
 
@@ -76,6 +77,7 @@ async function loadMathfieldElement(): Promise<MathfieldElementCtor> {
 		)
 			.then((mathliveModule) => {
 				mathfieldElementCtor = mathliveModule.MathfieldElement;
+				convertLatexToMarkup = mathliveModule.convertLatexToMarkup;
 				return mathfieldElementCtor;
 			})
 			.finally(() => {
@@ -489,8 +491,66 @@ export function createMathfield(config: MathfieldConfig): MathfieldElement {
 		if (!config.inline && !config.id) {
 			keepTogglesInRow(mfe);
 		}
+		// Obsidian's MathJax accepts \dots; MathLive needs an explicit alias.
+		mfe.macros = { ...mfe.macros, dots: { def: "\\ldots", expand: false } };
+		if (mfe.shadowRoot && !mfe.shadowRoot.querySelector(".mathlive-wide-accents")) {
+			const style = createEl("style", { cls: "mathlive-wide-accents" });
+			// MathLive centers a zero-width SVG box as if it were a fixed-width accent.
+			// That margin shrinks and shifts the stretchy SVG's containing block.
+			style.textContent = `.ML__vlist > .ML__center:has(> span > span > .ML__stretchy > svg[preserveAspectRatio="none"]) {
+				margin-left: 0 !important;
+			}
+			/* An already accented base carries its own horizontal correction. Center
+			   the next fixed-width accent without applying that correction again. */
+			.ML__vlist:has(> span:first-child :is(.ML__accent-body, .ML__stretchy)) > .ML__center:has(> .ML__accent-body) {
+				margin-left: 0 !important;
+			}`;
+			mfe.shadowRoot.append(style);
+		}
+		mfe.menuItems = mfe.menuItems.map((item) => {
+			if (!("submenu" in item) || !("id" in item) || item.id !== "accent") {
+				return item;
+			}
+			const accents = [["hat", "Hat"], ["tilde", "Tilde"]].map(([command, name]) => {
+				// Selection offsets count math atoms, so a command such as \alpha is one symbol.
+				const accentCommand = () => mfe.selection.ranges.some(([from, to]) => Math.abs(to - from) > 1)
+					? `wide${command}` : command;
+				return {
+					id: `accent-${command}`,
+					class: "ML__center-menu",
+					ariaLabel: name,
+					tooltip: () => `\\${accentCommand()}`,
+					label: () => convertLatexToMarkup(`\\${accentCommand()}{${mfe.getValue(mfe.selection, "latex") || "x"}}`, { macros: mfe.macros }),
+					onMenuSelect: () => mfe.insert(`\\${accentCommand()}{#@}`, { selectionMode: "item" }),
+				};
+			});
+			return {
+				...item,
+				submenu: [
+					...accents.filter((accent) => !item.submenu.some((entry) => "id" in entry && entry.id === accent.id)),
+					...item.submenu,
+				],
+			};
+		});
 	});
+	mfe.addEventListener("pointerdown", (event) => placeCursorAtCompoundBoundary(mfe, event));
 	closeMenuFromOutside(mfe);
+	mfe.addEventListener("keydown", (event: KeyboardEvent) => {
+		if (event.key !== "Backspace" || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.isComposing || mfe.readOnly || !mfe.selectionIsCollapsed) {
+			return;
+		}
+		const replacement = accentLayerAtCursor(mfe);
+		if (!replacement) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		// A selection command separates undo steps. Expand that selection to the whole
+		// outer accent before replacing it through MathLive's normal insertion API.
+		mfe.executeCommand("extendSelectionBackward");
+		mfe.selection = { ranges: [replacement.range] };
+		mfe.insert(replacement.latex, { selectionMode: "after" });
+	}, { capture: true });
 	attachShorthands(mfe);
 	keepFocusOnKeyboardTaps(mfe);
 
@@ -519,6 +579,88 @@ export function createMathfield(config: MathfieldConfig): MathfieldElement {
 	}
 
 	return mfe;
+}
+
+// MathLive descends into matrix cells and scripts even when the click is at an outer edge.
+// Run after its pointer handler so bounds are fresh, and only correct unmodified mouse clicks.
+function placeCursorAtCompoundBoundary(mfe: MathfieldElement, event: PointerEvent) {
+	if (event.pointerType !== "mouse" || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
+		return;
+	}
+	const entries = Array.from({ length: mfe.lastOffset + 1 }, (_, offset) => ({
+		offset, ...mfe.getElementInfo(offset),
+	}));
+	const tolerance = Math.min(8, Number.parseFloat(mfe.win.getComputedStyle(mfe).fontSize) / 4);
+	for (const entry of entries) {
+		const matrix = /^\\begin\{(?:[bBpPvV]?matrix|smallmatrix)\}/.test(entry.latex ?? "");
+		const script = /^[_^]/.test(entry.latex ?? "");
+		if ((!matrix && !script) || entry.depth === undefined) {
+			continue;
+		}
+		let before = entry.offset - 1;
+		while (before >= 0 && (entries[before].depth ?? -1) > entry.depth) {
+			before -= 1;
+		}
+		const children = entries.slice(before + 1, entry.offset).filter((child) => child.bounds && child.bounds.width > 0 && child.latex);
+		if (children.length === 0) {
+			continue;
+		}
+		const left = Math.min(...children.map((child) => child.bounds!.left));
+		const right = Math.max(...children.map((child) => child.bounds!.right));
+		const bounds = matrix ? entry.bounds : entries[before]?.bounds;
+		if (!bounds || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+			continue;
+		}
+		if (matrix && event.clientX >= bounds.left - tolerance && event.clientX < left - 1) {
+			mfe.focus();
+			mfe.position = before;
+			return;
+		}
+		const rightEdge = matrix ? bounds.right : right;
+		if (event.clientX > right + 1 && event.clientX <= rightEdge + tolerance) {
+			mfe.focus();
+			mfe.position = entry.offset;
+			return;
+		}
+	}
+}
+
+function accentLayerAtCursor(mfe: MathfieldElement): { range: [number, number]; latex: string } | undefined {
+	const entries = Array.from({ length: mfe.lastOffset + 1 }, (_, offset) => mfe.getElementInfo(offset));
+	let replacement: { range: [number, number]; latex: string } | undefined;
+	// Children precede their parent in MathLive's offsets. Follow only the right edge
+	// up the tree, keeping the outermost accent; editing inside a wide accent stays normal.
+	for (let offset = mfe.position; offset <= mfe.lastOffset; offset++) {
+		const entry = entries[offset];
+		if (!entry || (offset > mfe.position && (entry.depth ?? 0) >= (entries[offset - 1]?.depth ?? 0))) {
+			break;
+		}
+		const latex = entry.latex ?? "";
+		const command = /^\\(?:hat|widehat|tilde|widetilde|vec|dot|ddot|dddot|ddddot|bar|overline|underline|acute|grave|breve|check|mathring|ring|overrightarrow|overleftarrow|overleftrightarrow|overgroup|undergroup|overbrace|underbrace)\s*\{/.exec(latex);
+		if (!command) {
+			continue;
+		}
+		let nesting = 1;
+		let end = command[0].length;
+		for (; end < latex.length; end++) {
+			if (latex[end] === "\\") {
+				end++;
+			} else if (latex[end] === "{") {
+				nesting++;
+			} else if (latex[end] === "}" && --nesting === 0) {
+				break;
+			}
+		}
+		if (nesting !== 0) {
+			continue;
+		}
+		let before = offset - 1;
+		while (before > 0 && (entries[before]?.depth ?? 0) > (entry.depth ?? 0)) {
+			before--;
+		}
+		replacement = { range: [before, offset], latex: latex.slice(command[0].length, end) + latex.slice(end + 1) };
+	}
+	return replacement;
 }
 
 // MathLive puts an open ☰ or right-click menu inside a clear layer over the window, and removes
